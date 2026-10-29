@@ -1,0 +1,43 @@
+name: build-fairplayed
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate project
+        run: |
+          find . -name "FairPlayed.xcodeproj" -maxdepth 5
+          ls -la
+
+      - name: Build unsigned app
+        run: |
+          PROJ=$(find . -name "FairPlayed.xcodeproj" -maxdepth 5 | head -1)
+          test -n "$PROJ" || { echo "xcodeproj not found"; exit 1; }
+          cd "$(dirname "$PROJ")"
+          pwd
+          xcodebuild -project FairPlayed.xcodeproj -target FairPlayed \
+            -configuration Release -sdk iphoneos -arch arm64 \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" build
+
+      - name: Package
+        run: |
+          APP=$(find . -name "FairPlayed.app" -type d -path "*Release-iphoneos*" | head -1)
+          test -n "$APP" || { echo "app not found"; find . -name "*.app" -type d; exit 1; }
+          echo "APP=$APP"
+          file "$APP/FairPlayed"
+          ditto -c -k --keepParent "$APP" FairPlayed-unsigned.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FairPlayed-unsigned
+          path: FairPlayed-unsigned.zip
